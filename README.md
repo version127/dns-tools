@@ -2,7 +2,7 @@
 
 DNS Tools is a self-hostable collection for seeing what a domain is actually doing in DNS. It can look up records, follow the path from the root servers, compare a recent change, and inspect delegation, DNSSEC, SOA, and CAA configuration without turning the result into a vague health score.
 
-[Try the hosted tools](https://version127.com/dns-tools) · [API reference](docs/api.md) · [Self-hosting guide](docs/self-hosting.md) · [Launch checklist](docs/launch-checklist.md)
+[Try the hosted tools](https://version127.com/dns-tools) · [API reference](docs/api.md) · [Self-hosting guide](docs/self-hosting.md) · [Launch checklist](docs/launch-checklist.md) · [Changelog](CHANGELOG.md)
 
 ![DNS Lookup showing completed records for cloudflare.com](screenshots/dns-lookup.png)
 

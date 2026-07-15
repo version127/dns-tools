@@ -2,6 +2,8 @@
 
 Run this list from a clean checkout before publishing a release.
 
+The latest completed run is recorded in [the 2026-07-15 launch report](launch-report-2026-07-15.md).
+
 ## Reproducible install
 
 - [ ] `npm ci` installs only what is recorded in `package-lock.json`.
