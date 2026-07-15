@@ -1,0 +1,56 @@
+.shell { width: 100%; }
+
+.page {
+  align-items: start;
+  display: grid;
+  grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+  min-height: calc(100vh - var(--top-bar-height));
+}
+
+.sidebar {
+  background: var(--color-bg);
+  border-right: 1px solid var(--color-border);
+  height: calc(100vh - var(--top-bar-height));
+  overflow-y: auto;
+  position: sticky;
+  top: var(--top-bar-height);
+}
+
+.sidebarBar, .backdrop, .close { display: none; }
+
+.toggle {
+  align-items: center;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  display: inline-flex;
+  font-size: var(--text-sm);
+  gap: var(--space-3);
+  padding: 8px 14px;
+}
+
+.toggleIcon { display: inline-flex; flex-direction: column; gap: 3px; width: 15px; }
+.toggleIcon span { background: currentColor; height: 2px; width: 100%; }
+.main { display: flex; flex-direction: column; min-height: calc(100vh - var(--top-bar-height)); min-width: 0; }
+.content { flex: 1 0 auto; min-width: 0; }
+.footer { border-top: 1px solid var(--color-border); color: var(--color-text-muted); padding: 16px clamp(24px, 5vw, 72px); }
+.footer p { font-size: var(--text-xs); margin: 0; }
+.footer a { color: var(--color-link); }
+
+@media (max-width: 900px) {
+  .page { grid-template-columns: 1fr; }
+  .sidebarBar { background: var(--color-bg); border-bottom: 1px solid var(--color-border); display: flex; padding: var(--space-3) 22px; position: sticky; top: var(--top-bar-height); z-index: 20; }
+  .backdrop { background: var(--color-overlay); display: block; inset: 0; opacity: 0; position: fixed; visibility: hidden; z-index: 150; }
+  .backdrop.open { opacity: 1; visibility: visible; }
+  .sidebar { bottom: 0; height: auto; left: 0; max-width: 82vw; position: fixed; top: 0; transform: translateX(-100%); transition: transform 180ms ease; visibility: hidden; width: 320px; z-index: 160; }
+  .sidebar.open { transform: translateX(0); visibility: visible; }
+  .close { align-items: center; background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-sm); color: var(--color-text); display: inline-flex; height: 32px; justify-content: center; position: absolute; right: 14px; top: 14px; width: 32px; }
+  .main { min-height: 0; }
+}
+
+@media print {
+  .page { display: block; min-height: 0; }
+  .sidebar, .sidebarBar, .backdrop, .footer { display: none !important; }
+  .main, .content { min-height: 0; overflow: visible; }
+}

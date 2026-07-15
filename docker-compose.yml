@@ -1,0 +1,16 @@
+services:
+  dns-tools:
+    build: .
+    container_name: dns-tools
+    restart: unless-stopped
+    environment:
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:1273}
+      DNS_TOOLS_ALLOW_INDEXING: ${DNS_TOOLS_ALLOW_INDEXING:-false}
+    ports:
+      - "1273:1273"
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:1273/api/health').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

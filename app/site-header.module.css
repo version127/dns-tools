@@ -1,0 +1,30 @@
+.header {
+  align-items: center;
+  background: var(--color-nav-surface);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  height: var(--top-bar-height);
+  padding: 0 clamp(22px, 4vw, 64px);
+  position: sticky;
+  top: 0;
+  z-index: 100;
+}
+
+.brand {
+  align-items: center;
+  color: var(--color-text);
+  display: inline-flex;
+  font-size: var(--text-title);
+  font-weight: var(--weight-semibold);
+  gap: var(--space-4);
+}
+
+.logo {
+  height: 18px;
+  object-fit: contain;
+  width: auto;
+}
+
+@media print {
+  .header { display: none; }
+}

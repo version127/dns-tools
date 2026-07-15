@@ -1,0 +1,175 @@
+openapi: 3.1.0
+info:
+  title: DNS Tools API
+  version: 1.0.0
+  description: Same-origin APIs used by the self-hosted DNS Tools pages.
+  license:
+    name: MIT
+servers:
+  - url: http://localhost:1273
+paths:
+  /api/health:
+    get:
+      summary: Check process liveness
+      responses:
+        "200":
+          description: The Next.js process is ready.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, service]
+                properties:
+                  status: { const: ok }
+                  service: { const: dns-tools }
+  /api/dns/lookup:
+    post:
+      summary: Look up one record type or the defined All bundle
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LookupRequest" }
+      responses: { "200": { $ref: "#/components/responses/ToolResult" }, "400": { $ref: "#/components/responses/Error" }, "403": { $ref: "#/components/responses/Error" }, "429": { $ref: "#/components/responses/Error" } }
+  /api/dns/trace:
+    post:
+      summary: Follow one DNS question from the root servers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RecordRequest" }
+      responses: { "200": { $ref: "#/components/responses/ToolResult" }, "400": { $ref: "#/components/responses/Error" }, "403": { $ref: "#/components/responses/Error" }, "429": { $ref: "#/components/responses/Error" }, "504": { $ref: "#/components/responses/Error" } }
+  /api/dns/change-checker:
+    post:
+      summary: Compare authoritative and recursive DNS answers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ChangeRequest" }
+      responses: { "200": { $ref: "#/components/responses/ToolResult" }, "400": { $ref: "#/components/responses/Error" }, "403": { $ref: "#/components/responses/Error" }, "429": { $ref: "#/components/responses/Error" }, "504": { $ref: "#/components/responses/Error" } }
+  /api/dns/nameserver-checker:
+    post:
+      summary: Check parent and child nameserver delegation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NameRequest" }
+      responses: { "200": { $ref: "#/components/responses/ToolResult" }, "400": { $ref: "#/components/responses/Error" }, "403": { $ref: "#/components/responses/Error" }, "429": { $ref: "#/components/responses/Error" }, "504": { $ref: "#/components/responses/Error" } }
+  /api/dns/dnssec-checker:
+    post:
+      summary: Validate one DNSSEC answer from the root trust anchor
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DnssecRequest" }
+      responses: { "200": { $ref: "#/components/responses/ToolResult" }, "400": { $ref: "#/components/responses/Error" }, "403": { $ref: "#/components/responses/Error" }, "429": { $ref: "#/components/responses/Error" }, "504": { $ref: "#/components/responses/Error" } }
+  /api/dns/soa-checker:
+    post:
+      summary: Compare SOA values across authoritative nameservers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NameRequest" }
+      responses: { "200": { $ref: "#/components/responses/ToolResult" }, "400": { $ref: "#/components/responses/Error" }, "403": { $ref: "#/components/responses/Error" }, "429": { $ref: "#/components/responses/Error" }, "504": { $ref: "#/components/responses/Error" } }
+  /api/dns/caa-checker:
+    post:
+      summary: Find the effective CAA policy for a certificate name
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/NameRequest" }
+      responses: { "200": { $ref: "#/components/responses/ToolResult" }, "400": { $ref: "#/components/responses/Error" }, "403": { $ref: "#/components/responses/Error" }, "429": { $ref: "#/components/responses/Error" }, "504": { $ref: "#/components/responses/Error" } }
+components:
+  responses:
+    ToolResult:
+      description: Normalized tool result. The exact TypeScript result models live under lib/dns.
+      headers:
+        Cache-Control: { schema: { type: string }, description: Always no-store. }
+        X-RateLimit-Remaining: { schema: { type: integer } }
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ToolResult" }
+    Error:
+      description: Validation, policy, rate-limit, or timeout response.
+      content:
+        application/json:
+          schema: { $ref: "#/components/schemas/ErrorResponse" }
+  schemas:
+    NameRequest:
+      type: object
+      additionalProperties: false
+      required: [name]
+      properties:
+        name: { type: string, minLength: 1 }
+    RecordRequest:
+      type: object
+      additionalProperties: false
+      required: [name, recordType]
+      properties:
+        name: { type: string, minLength: 1 }
+        recordType: { $ref: "#/components/schemas/ForwardRecordType" }
+    DnssecRequest:
+      allOf:
+        - { $ref: "#/components/schemas/RecordRequest" }
+    ChangeRequest:
+      type: object
+      additionalProperties: false
+      required: [name, recordType]
+      properties:
+        name: { type: string, minLength: 1 }
+        recordType: { $ref: "#/components/schemas/ForwardRecordType" }
+        expectedAnswer: { type: string }
+    LookupRequest:
+      type: object
+      additionalProperties: false
+      required: [name, selection, resolver]
+      properties:
+        name: { type: string, minLength: 1 }
+        selection:
+          enum: [all, A, AAAA, CNAME, MX, NS, TXT, CAA, SOA, SRV, DS, DNSKEY, PTR]
+        resolver:
+          enum: [cloudflare, google, quad9, opendns, adguard, controld, yandex, authoritative]
+    ForwardRecordType:
+      enum: [A, AAAA, CNAME, MX, NS, TXT, CAA, SOA, SRV, DS, DNSKEY]
+    NullableBoolean:
+      type: [boolean, "null"]
+    NormalizedRecord:
+      type: object
+      required: [name, type, data, resolverTtlSeconds]
+      properties:
+        name: { type: string }
+        type: { type: string }
+        data: {}
+        resolverTtlSeconds: { type: [integer, "null"], minimum: 0 }
+      additionalProperties: true
+    RawDnsResponse:
+      type: [object, "null"]
+      additionalProperties: true
+    ToolResult:
+      type: object
+      description: Tool-specific normalized evidence. Optional provider fields remain nullable and raw responses remain attached.
+      properties:
+        checkedAt: { type: string, format: date-time }
+        durationMs: { type: number, minimum: 0 }
+        query: { type: object, additionalProperties: true }
+        records:
+          type: array
+          items: { $ref: "#/components/schemas/NormalizedRecord" }
+        rawResponse: { $ref: "#/components/schemas/RawDnsResponse" }
+      additionalProperties: true
+    ErrorResponse:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
