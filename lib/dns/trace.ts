@@ -3,6 +3,7 @@ import {
   queryDirectDnsServer,
   type DirectDnsTarget,
 } from "./authoritative.ts";
+import { safeDnsErrorMessage } from "./errors.ts";
 import type { RawDnsWireRecord, RawDnsWireResponse } from "./dns-wire.ts";
 import { canonicalDnsName, normalizeDnsInput } from "./normalize-name.ts";
 import { recordTypeCode, recordTypeName } from "./record-types.ts";
@@ -171,7 +172,7 @@ async function queryCandidates(
       attempts.push({
         server,
         durationMs: Math.max(0, Math.round(performance.now() - started)),
-        error: error instanceof Error ? error.message : "The nameserver query failed.",
+        error: safeDnsErrorMessage(error, "The nameserver query failed."),
       });
     }
   }

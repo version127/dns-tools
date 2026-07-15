@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { dnsClientKey, isSameOriginDnsRequest, readDnsJsonBody } from "@/lib/dns/api.ts";
 import { consumeDnsLookupLimit } from "@/lib/dns/rate-limit.ts";
 import { normalizeTraceRecordType, traceDns } from "@/lib/dns/trace.ts";
 
@@ -12,46 +13,17 @@ function errorResponse(status: number, code: string, message: string, headers?: 
   );
 }
 
-function requestHost(request: Request) {
-  return request.headers.get("x-forwarded-host")?.split(",")[0]?.trim()
-    ?? request.headers.get("host")
-    ?? new URL(request.url).host;
-}
-
-function isSameOrigin(request: Request) {
-  if (request.headers.get("sec-fetch-site") === "cross-site") return false;
-  const origin = request.headers.get("origin");
-  if (!origin) return true;
-  try {
-    return new URL(origin).host === requestHost(request);
-  } catch {
-    return false;
-  }
-}
-
-function clientKey(request: Request) {
-  return request.headers.get("cf-connecting-ip")
-    ?? request.headers.get("x-real-ip")
-    ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
-    ?? "unknown";
-}
-
 export async function POST(request: Request) {
-  if (!isSameOrigin(request)) {
+  if (!isSameOriginDnsRequest(request)) {
     return errorResponse(403, "cross_origin_request", "DNS traces must come from this DNS Tools installation.");
   }
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (Number.isFinite(contentLength) && contentLength > 4096) {
-    return errorResponse(413, "request_too_large", "The DNS trace request is too large.");
-  }
-
   let body: Record<string, unknown>;
   try {
-    const value = await request.json();
-    if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid body");
-    body = value as Record<string, unknown>;
-  } catch {
-    return errorResponse(400, "invalid_json", "Send a valid JSON trace request.");
+    body = await readDnsJsonBody(request);
+  } catch (error) {
+    return error instanceof Error && error.message === "request_too_large"
+      ? errorResponse(413, "request_too_large", "The DNS trace request is too large.")
+      : errorResponse(400, "invalid_json", "Send a valid JSON trace request.");
   }
   if ("resolver" in body || "do" in body || "cd" in body || "all" in body) {
     return errorResponse(400, "unsupported_option", "A DNS trace starts at the root and accepts one record type.");
@@ -67,7 +39,7 @@ export async function POST(request: Request) {
     return errorResponse(400, "invalid_record_type", error instanceof Error ? error.message : "Choose one supported record type.");
   }
 
-  const limit = consumeDnsLookupLimit(`trace:${clientKey(request)}`, 11);
+  const limit = consumeDnsLookupLimit(`trace:${dnsClientKey(request)}`, 11);
   if (!limit.allowed) {
     return errorResponse(429, "rate_limited", "Too many DNS traces. Try again after the retry period.", {
       "retry-after": String(limit.retryAfterSeconds),

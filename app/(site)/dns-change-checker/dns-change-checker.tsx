@@ -2,8 +2,8 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import { CHANGE_RECORD_TYPES, type ChangeRecordType, type DnsSourceAnswer } from "@/lib/dns/diagnostic-types.ts";
-import { csvFromRows, groupDnsSources } from "@/lib/dns/diagnostic-presentation.ts";
-import { DiagnosticResultHeader, DownloadResultButton } from "../_dns-tools/diagnostic-result-ui";
+import { groupDnsSources } from "@/lib/dns/diagnostic-presentation.ts";
+import { DiagnosticResultHeader, diagnosticReportJson, DownloadResultButton } from "../_dns-tools/diagnostic-result-ui";
 import styles from "../_dns-tools/dns-diagnostics.module.css";
 
 type Result = {
@@ -11,6 +11,7 @@ type Result = {
   checkedAt: string;
   durationMs: number;
   zone: string;
+  ipv6Connectivity: boolean | null;
   authoritative: DnsSourceAnswer[];
   resolvers: DnsSourceAnswer[];
   summary: { authoritativeServersAgree: boolean; agreeingResolvers: number; totalResolvers: number; expectedAnswerMatches: string[] | null };
@@ -43,15 +44,6 @@ function AnswerGroups({ sources, authoritative }: { sources: DnsSourceAnswer[]; 
   })}</div>;
 }
 
-function resultCsv(result: Result) {
-  return csvFromRows([
-    ["source kind", "source", "server address", "response", "owner", "type", "value", "ttl seconds", "error"],
-    ...[...result.authoritative, ...result.resolvers].flatMap((source) => source.records.length
-      ? source.records.map((record) => [source.kind, source.label, source.server?.address ?? "", source.responseCode, record.ownerName, record.type, record.value, record.resolverTtlSeconds, source.error])
-      : [[source.kind, source.label, source.server?.address ?? "", source.responseCode, "", result.query.recordType, "", "", source.error]]),
-  ]);
-}
-
 export function DnsChangeChecker({ initialName = "", initialRecordType = "A" }: { initialName?: string; initialRecordType?: ChangeRecordType }) {
   const [name, setName] = useState(initialName);
   const [recordType, setRecordType] = useState(initialRecordType);
@@ -59,7 +51,7 @@ export function DnsChangeChecker({ initialName = "", initialRecordType = "A" }: 
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const csv = useMemo(() => result ? resultCsv(result) : "", [result]);
+  const report = useMemo(() => result ? diagnosticReportJson("DNS Change Checker", result) : "", [result]);
   const hasAuthoritativeReply = result?.authoritative.some((source) => !source.error) ?? false;
 
   async function submit(event: FormEvent) {
@@ -84,8 +76,9 @@ export function DnsChangeChecker({ initialName = "", initialRecordType = "A" }: 
       {error ? <p className="dns-form-error" role="alert">{error}</p> : null}
     </form>
     {result ? <section className={styles.results} aria-live="polite">
-      <DiagnosticResultHeader action={<DownloadResultButton contents={csv} filename={`${result.query.name}-${result.query.recordType}-dns-change.csv`} />} checkedAt={result.checkedAt} durationMs={result.durationMs} hostname={result.query.name}>
+      <DiagnosticResultHeader action={<DownloadResultButton contents={report} filename={`${result.query.name}-${result.query.recordType}-dns-change-report.json`} />} checkedAt={result.checkedAt} durationMs={result.durationMs} hostname={result.query.name}>
         <p>{!hasAuthoritativeReply ? "None of the authoritative nameserver addresses returned a usable answer, so there is no source answer to compare yet." : result.summary.authoritativeServersAgree ? "The authoritative nameservers agree on the current answer." : "The authoritative nameservers are returning different answers, so the change is not consistent at the source yet."} {hasAuthoritativeReply ? `${result.summary.agreeingResolvers} of ${result.summary.totalResolvers} public resolvers match the authoritative answer we used for comparison.` : "Check the source errors below before reading the resolver caches."}</p>
+        {result.ipv6Connectivity === false ? <p>IPv6 authoritative checks were skipped because this checker does not have IPv6 connectivity.</p> : null}
         {!result.summary.authoritativeServersAgree && hasAuthoritativeReply ? <p><a className={styles.nextCheck} href={`/soa-checker?name=${encodeURIComponent(result.zone)}`}>Compare their SOA serials</a> to see whether one nameserver is still serving an older copy of the zone.</p> : null}
       </DiagnosticResultHeader>
       {result.query.expectedAnswer && result.summary.expectedAnswerMatches ? <div className={styles.finding} data-tone={result.summary.expectedAnswerMatches.length ? "good" : "warning"}><p>{result.summary.expectedAnswerMatches.length ? `The value you expected appears in ${result.summary.expectedAnswerMatches.length} source${result.summary.expectedAnswerMatches.length === 1 ? "" : "s"}.` : "The value you expected did not appear in any response we received."}</p></div> : null}

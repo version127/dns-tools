@@ -6,4 +6,4 @@ The tool discovers the zone and asks every reachable authoritative address befor
 
 A different resolver answer is evidence of a different cached value, not proof of worldwide propagation or a broken resolver. Location-aware A and AAAA answers can also differ legitimately.
 
-Repeated sources with the same record set are grouped without discarding source names, addresses, TTL values, errors, or raw responses. Resolver TTL and Authoritative TTL remain separate concepts. The complete comparison can be exported as CSV.
+Repeated sources with the same record set are grouped without discarding source names, addresses, TTL values, errors, or raw responses. Resolver TTL and Authoritative TTL remain separate concepts. The complete comparison and raw evidence can be downloaded as JSON.

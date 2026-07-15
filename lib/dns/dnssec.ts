@@ -11,6 +11,7 @@ import {
   walk,
 } from "@namefi/dnssec-audit";
 import { queryPublicResolver } from "./doh.ts";
+import { safeDnsErrorMessage } from "./errors.ts";
 import { dnsResponseCode, normalizeChangeRecordType, normalizeDiagnosticName, normalizeWireRecord, type PublicDiagnosticQuery } from "./diagnostics.ts";
 import type { RawDnsWireResponse } from "./dns-wire.ts";
 import { canonicalDnsName } from "./normalize-name.ts";
@@ -163,7 +164,7 @@ async function evidenceQuery(name: string, type: DnssecRecordType | "DS" | "DNSK
       error: null,
     };
   } catch (error) {
-    return { responseCode: null, authenticatedData: null, records: [], rawResponse: null as RawDnsWireResponse | null, error: error instanceof Error ? error.message : "The evidence lookup failed." };
+    return { responseCode: null, authenticatedData: null, records: [], rawResponse: null as RawDnsWireResponse | null, error: safeDnsErrorMessage(error, "The evidence lookup failed.") };
   }
 }
 
@@ -186,7 +187,7 @@ export async function checkDnssec(
       zones: [],
       steps: [],
       signatures: [],
-      rawReport: { error: error instanceof Error ? error.message : "The DNSSEC validator failed." },
+      rawReport: { error: safeDnsErrorMessage(error, "The DNSSEC validator failed.") },
     };
   }
   const query = options.publicQuery ?? queryPublicResolver;

@@ -1,6 +1,7 @@
 import { buildUnifiedAliasChain } from "./alias-chain.ts";
 import { discoverAuthoritativeTarget, queryAuthoritative, type AuthoritativeTarget } from "./authoritative.ts";
 import { queryPublicResolver } from "./doh.ts";
+import { safeDnsErrorMessage } from "./errors.ts";
 import { enrichDnsResults } from "./network-enrichment.ts";
 import { normalizeDnsInput, reverseDnsName } from "./normalize-name.ts";
 import { normalizeProviderResponse } from "./normalize-provider-response.ts";
@@ -99,9 +100,7 @@ async function fetchOne(
     const timedOut = timeoutController.signal.aborted;
     const status = error && typeof error === "object" && "status" in error ? Number(error.status) : null;
     const tooLarge = error instanceof Error && error.message.includes("oversized");
-    const unavailableMessage = error instanceof Error && error.message
-      ? error.message
-      : `${resolverLabel(resolver)} could not be reached.`;
+    const unavailableMessage = safeDnsErrorMessage(error, `${resolverLabel(resolver)} could not be reached.`);
     return failedResult(
       name,
       type,
@@ -118,7 +117,7 @@ async function fetchOne(
       timedOut
         ? `${resolverLabel(resolver)} did not answer within the lookup timeout.`
         : unavailableMessage,
-      error instanceof Error ? { name: error.name, message: error.message } : null,
+      error instanceof Error ? { name: error.name, message: unavailableMessage } : null,
     );
   } finally {
     clearTimeout(timeout);

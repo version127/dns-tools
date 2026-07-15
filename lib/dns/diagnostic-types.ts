@@ -30,6 +30,7 @@ export type DelegationObservation = {
 
 export type NameserverReachability = {
   server: { hostname: string; address: string };
+  skippedReason: "checker_ipv6_unavailable" | null;
   udp: { reachable: boolean; authoritative: boolean | null; responseCode: string | null; error: string | null };
   tcp: { reachable: boolean; authoritative: boolean | null; responseCode: string | null; error: string | null };
   soa: SoaRecord | null;
@@ -51,6 +52,7 @@ export type DelegationCheck = {
   inputName: string;
   zone: string;
   parentZone: string;
+  ipv6Connectivity: boolean | null;
   parentNameservers: NameserverAddress[];
   parentObservations: DelegationObservation[];
   parentDelegatedNameservers: string[];

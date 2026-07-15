@@ -19,8 +19,10 @@ import {
 import {
   clearDnsLookupLimitsForTests,
   consumeDnsLookupLimit,
+  dnsLookupLimitEntryCountForTests,
   rateLimitCost,
 } from "../../lib/dns/rate-limit.ts";
+import { readDnsJsonBody } from "../../lib/dns/request.ts";
 import { formatAuthoritativeTtl, formatResolverTtl, recordFields } from "../../lib/dns/format-record.ts";
 import { websiteFaviconUrl } from "../../lib/dns/favicon.ts";
 import { dnsRecordsCsv } from "../../lib/dns/export.ts";
@@ -340,6 +342,23 @@ test("weighted limits allow 20 All bundles or 100 individual requests per window
     assert.equal(consumeDnsLookupLimit("single", rateLimitCost("A")).allowed, true);
   }
   assert.equal(consumeDnsLookupLimit("single", rateLimitCost("A")).allowed, false);
+});
+
+test("request bodies are bounded even when content-length is missing", async () => {
+  const request = new Request("https://version127.com/api/dns/lookup", {
+    method: "POST",
+    body: JSON.stringify({ name: "a".repeat(5000) }),
+    headers: { "content-type": "application/json" },
+  });
+  await assert.rejects(readDnsJsonBody(request), /request_too_large/);
+});
+
+test("the in-process DNS limiter cannot grow without a fixed cap", () => {
+  clearDnsLookupLimitsForTests();
+  for (let index = 0; index < 5200; index += 1) {
+    consumeDnsLookupLimit(`client-${index}`, 1, { maxRequests: 10_000, maxUnits: 10_000 });
+  }
+  assert.ok(dnsLookupLimitEntryCountForTests() <= 5000);
 });
 
 test("formats Resolver TTL as remaining resolver cache time", () => {

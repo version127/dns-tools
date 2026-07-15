@@ -4,7 +4,7 @@ import { useMemo, useState, type FormEvent } from "react";
 import type { WalkStep } from "@namefi/dnssec-audit";
 import type { NormalizedDnsRecord } from "@/lib/dns/types.ts";
 import { DNSSEC_RECORD_TYPES, type DnssecRecordType, type DnssecSignature, type DnssecVerdict } from "@/lib/dns/dnssec-types.ts";
-import { DiagnosticResultHeader, DownloadResultButton } from "../_dns-tools/diagnostic-result-ui";
+import { DiagnosticResultHeader, diagnosticReportJson, DownloadResultButton } from "../_dns-tools/diagnostic-result-ui";
 import styles from "../_dns-tools/dns-diagnostics.module.css";
 
 type Evidence = { responseCode: string | null; authenticatedData: boolean | null; records: NormalizedDnsRecord[]; rawResponse: unknown; error: string | null };
@@ -63,7 +63,7 @@ export function DnssecChecker({ initialName = "", initialRecordType = "A" }: { i
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const report = useMemo(() => result ? JSON.stringify(result, null, 2) : "", [result]);
+  const report = useMemo(() => result ? diagnosticReportJson("DNSSEC Chain Checker", result) : "", [result]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();

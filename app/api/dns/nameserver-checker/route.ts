@@ -9,7 +9,7 @@ export async function POST(request: Request) {
   if (!isSameOriginDnsRequest(request)) return dnsErrorResponse(403, "cross_origin_request", "DNS checks must come from this DNS Tools installation.");
   let body: Record<string, unknown>;
   try { body = await readDnsJsonBody(request); }
-  catch { return dnsErrorResponse(400, "invalid_request", "Send a valid nameserver check request."); }
+  catch (error) { return dnsErrorResponse(error instanceof Error && error.message === "request_too_large" ? 413 : 400, "invalid_request", "Send a small, valid nameserver check request."); }
   if (typeof body.name !== "string") return dnsErrorResponse(400, "invalid_name", "Enter a domain or hostname.");
   const limit = consumeDnsLookupLimit(`nameserver:${dnsClientKey(request)}`, 24);
   if (!limit.allowed) return dnsErrorResponse(429, "rate_limited", "Too many nameserver checks. Try again shortly.", { "retry-after": String(limit.retryAfterSeconds) });

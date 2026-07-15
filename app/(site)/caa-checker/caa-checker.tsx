@@ -2,8 +2,7 @@
 
 import { useMemo, useState, type FormEvent } from "react";
 import type { CaaRecord } from "@/lib/dns/diagnostic-types.ts";
-import { csvFromRows } from "@/lib/dns/diagnostic-presentation.ts";
-import { DiagnosticResultHeader, DownloadResultButton } from "../_dns-tools/diagnostic-result-ui";
+import { DiagnosticResultHeader, diagnosticReportJson, DownloadResultButton } from "../_dns-tools/diagnostic-result-ui";
 import styles from "../_dns-tools/dns-diagnostics.module.css";
 
 type SearchReason = "requested" | "alias" | "parent";
@@ -21,19 +20,12 @@ function reasonText(reason: SearchReason) {
   return "Moved to the next parent of the certificate name";
 }
 
-function resultCsv(result: Result) {
-  return csvFromRows([
-    ["effective name", "owner", "flags", "critical", "tag", "value", "resolver ttl seconds", "valid"],
-    ...result.records.map((record) => [result.effectiveName, record.ownerName, record.flags, record.critical, record.tag, record.value, record.ttlSeconds, record.valid]),
-  ]);
-}
-
 export function CaaChecker({ initialName = "" }: { initialName?: string }) {
   const [name, setName] = useState(initialName);
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const csv = useMemo(() => result ? resultCsv(result) : "", [result]);
+  const report = useMemo(() => result ? diagnosticReportJson("CAA Policy Checker", result) : "", [result]);
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -51,7 +43,7 @@ export function CaaChecker({ initialName = "" }: { initialName?: string }) {
   return <section className="dns-tool" aria-label="CAA policy checker">
     <form className="dns-lookup-form" onSubmit={submit}><label className="dns-name-field"><span>Domain or hostname</span><input autoCapitalize="none" autoComplete="off" onChange={(event) => setName(event.target.value)} placeholder="www.github.com" spellCheck={false} value={name} /></label><button className="dns-submit" disabled={loading}>{loading ? "Finding CAA policy..." : "Check CAA policy"}</button>{error ? <p className="dns-form-error" role="alert">{error}</p> : null}</form>
     {result ? <section className={styles.results} aria-live="polite">
-      <DiagnosticResultHeader action={<DownloadResultButton contents={csv} filename={`${result.query.inputName}-caa.csv`} />} checkedAt={result.checkedAt} durationMs={result.durationMs} hostname={result.query.inputName}>
+      <DiagnosticResultHeader action={<DownloadResultButton contents={report} filename={`${result.query.inputName}-caa-report.json`} />} checkedAt={result.checkedAt} durationMs={result.durationMs} hostname={result.query.inputName}>
         <p>{result.status === "undetermined" ? `We could not determine the effective CAA policy. ${result.error ?? "The DNS search did not complete."}` : result.status === "no_policy" ? "No CAA policy was found on this name or its parents, so CAA does not restrict which certificate authority may issue." : `The policy that applies to this name was found at ${result.effectiveName}.`}</p>
       </DiagnosticResultHeader>
       {result.status !== "undetermined" ? <div className={styles.grid}><Policy title="Normal certificates" policy={result.normal} /><Policy title="Wildcard certificates" policy={result.wildcard} note={result.usesIssueForWildcard ? "There is no issuewild record, so the issue records apply here too." : undefined} /></div> : null}

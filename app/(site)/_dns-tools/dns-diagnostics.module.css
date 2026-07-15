@@ -10,6 +10,7 @@
 .results {
   display: grid;
   gap: var(--space-10);
+  min-width: 0;
 }
 
 .resultHeader {
@@ -93,6 +94,7 @@
 .section {
   display: grid;
   gap: var(--space-5);
+  min-width: 0;
 }
 
 .section > h3 {
@@ -166,6 +168,11 @@
   color: var(--color-text-muted);
 }
 
+.raw {
+  max-width: 100%;
+  min-width: 0;
+}
+
 .raw summary {
   color: var(--color-text-muted);
   cursor: pointer;
@@ -176,12 +183,16 @@
   background: var(--color-surface-solid);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-md);
+  box-sizing: border-box;
   font-size: var(--text-xs);
   margin: var(--space-4) 0 0;
   max-height: 360px;
+  max-width: 100%;
   overflow: auto;
+  overflow-wrap: anywhere;
   padding: var(--space-5);
   white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .grid {
@@ -202,6 +213,11 @@
 .compactTable td,
 .compactTable th {
   vertical-align: top;
+}
+
+.skippedRow th,
+.skippedRow td {
+  color: var(--color-text-muted) !important;
 }
 
 .flow {

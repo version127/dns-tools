@@ -72,7 +72,7 @@ POST /api/dns/nameserver-checker
 { "name": "example.com" }
 ```
 
-The response contains the discovered zone, parent and child NS sets, actual referral glue, child-published addresses, UDP and TCP reachability observations, authoritative SOA status, mismatches, shared-address and network context, and raw parent, child, address, and transport responses.
+The response contains the discovered zone, parent and child NS sets, actual referral glue, child-published addresses, UDP and TCP reachability observations, authoritative SOA status, mismatches, shared-address and network context, and raw parent, child, address, and transport responses. `ipv6Connectivity` reports whether the checker could use IPv6. If it is `false`, IPv6 reachability rows remain in the response with `skippedReason: "checker_ipv6_unavailable"`; they are not reported as failures of the domain.
 
 ## DNSSEC Chain Checker
 

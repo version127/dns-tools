@@ -4,6 +4,7 @@ import test from "node:test";
 import { assessDelegation, checkCaaPolicy, compareSerials, negativeCacheTtlSeconds, parseCaaRecord, parseSoaRecord } from "../../lib/dns/diagnostics.ts";
 import { checkDnssec, dnssecSignatureFromRrsig, parseDelvVerdict } from "../../lib/dns/dnssec.ts";
 import { csvFromRows, groupDnsSources, groupSoaObservations } from "../../lib/dns/diagnostic-presentation.ts";
+import { safeDnsErrorMessage } from "../../lib/dns/errors.ts";
 
 test("SOA records retain every field and serial comparison follows RFC 1982 wraparound", () => {
   assert.deepEqual(parseSoaRecord({ name: "example.com", type: 6, TTL: 300, data: "ns1.example.com hostmaster.example.com 4294967295 3600 600 86400 300" }), {
@@ -56,7 +57,7 @@ test("CAA lookup does not silently skip a failed level", async () => {
   const result = await checkCaaPolicy("www.example.com", { publicQuery: async () => { throw new Error("timeout"); } });
   assert.equal(result.status, "undetermined");
   assert.equal(result.levels.length, 1);
-  assert.equal(result.error, "timeout");
+  assert.equal(result.error, "The nameserver did not answer before the timeout.");
 });
 
 test("CAA follows an alias but resumes parent search on the original certificate name", async () => {
@@ -182,6 +183,45 @@ test("delegation assessment reports each failed transport, glue drift, and share
   assert.ok(assessment.findings.some((finding) => finding.includes("same IP address")));
   assert.ok(assessment.notes.some((note) => note.includes("AS64500")));
   assert.ok(assessment.notes.some((note) => note.includes("192.0.2.0/24")));
+});
+
+test("delegation assessment does not blame the domain when the checker has no IPv6 route", () => {
+  const assessment = assessDelegation({
+    zone: "example.com",
+    parentDelegatedNameservers: ["ns1.example.net"],
+    childPublishedNameservers: ["ns1.example.net"],
+    parentGlue: [],
+    nameserverAddresses: [{ hostname: "ns1.example.net", addresses: ["2001:db8::53"] }],
+    ipv6Connectivity: false,
+    reachability: [{
+      server: { hostname: "ns1.example.net", address: "2001:db8::53" },
+      skippedReason: "checker_ipv6_unavailable",
+      udp: { reachable: false, authoritative: null, responseCode: null, error: null },
+      tcp: { reachable: false, authoritative: null, responseCode: null, error: null },
+      soa: null,
+      rawResponses: { udp: null, tcp: null },
+    }],
+    authoritativeAddressObservations: [],
+    addressDetails: [],
+  });
+
+  assert.deepEqual(assessment.findings, []);
+  assert.deepEqual(assessment.notes, ["IPv6 checks were skipped because this checker does not have IPv6 connectivity."]);
+});
+
+test("network errors shown to visitors do not expose socket internals", () => {
+  assert.equal(
+    safeDnsErrorMessage(new Error("connect ENETUNREACH 2606:4700::1111:53 - Local (:::0)"), "The nameserver did not answer."),
+    "This checker could not reach that address from its network.",
+  );
+  assert.equal(
+    safeDnsErrorMessage(new Error("connect ECONNREFUSED 203.0.113.9:53"), "The nameserver did not answer."),
+    "The nameserver refused the connection.",
+  );
+  assert.equal(
+    safeDnsErrorMessage(new Error("secret internal failure /srv/app/.env"), "The nameserver did not answer."),
+    "The nameserver did not answer.",
+  );
 });
 
 test("negative SOA cache time uses the lower of the SOA TTL and MINIMUM", () => {

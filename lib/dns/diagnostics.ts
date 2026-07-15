@@ -1,6 +1,8 @@
+import { isIP } from "node:net";
 import { queryDirectDnsServer, type DirectDnsTarget } from "./authoritative.ts";
 import type { RawDnsWireRecord, RawDnsWireResponse } from "./dns-wire.ts";
 import { queryPublicResolver } from "./doh.ts";
+import { safeDnsErrorMessage } from "./errors.ts";
 import { canonicalDnsName, normalizeDnsInput } from "./normalize-name.ts";
 import { recordTypeCode, recordTypeName } from "./record-types.ts";
 import { dnsResolverProfiles, resolverLabel } from "./resolvers.ts";
@@ -18,6 +20,7 @@ export type DiagnosticOptions = {
   signal?: AbortSignal;
   timeoutMs?: number;
   addressEnrichment?: typeof enrichDnsAddresses;
+  ipv6ConnectivityCheck?: () => Promise<boolean>;
 };
 
 export type NameserverAddress = {
@@ -37,6 +40,7 @@ export type DelegationObservation = {
 
 export type NameserverReachability = {
   server: DirectDnsTarget;
+  skippedReason: "checker_ipv6_unavailable" | null;
   udp: { reachable: boolean; authoritative: boolean | null; responseCode: string | null; error: string | null };
   tcp: { reachable: boolean; authoritative: boolean | null; responseCode: string | null; error: string | null };
   soa: SoaRecord | null;
@@ -58,6 +62,7 @@ export type DelegationCheck = {
   inputName: string;
   zone: string;
   parentZone: string;
+  ipv6Connectivity: boolean | null;
   parentNameservers: NameserverAddress[];
   parentObservations: DelegationObservation[];
   parentDelegatedNameservers: string[];
@@ -116,6 +121,45 @@ export function normalizeWireRecord(record: RawDnsWireRecord): NormalizedDnsReco
 
 function unique(values: string[]) {
   return [...new Set(values.map(canonicalDnsName))].sort();
+}
+
+function isIpv6Target(target: DirectDnsTarget) {
+  return isIP(target.address) === 6;
+}
+
+function checkerNetworkCannotReachIpv6(error: unknown) {
+  const message = error instanceof Error ? `${error.name} ${error.message}` : String(error);
+  return /\b(?:ENETUNREACH|EADDRNOTAVAIL|EAFNOSUPPORT|EPROTONOSUPPORT)\b/.test(message);
+}
+
+async function detectIpv6Connectivity(options: DiagnosticOptions) {
+  if (options.ipv6ConnectivityCheck) return options.ipv6ConnectivityCheck();
+  try {
+    await (options.directQuery ?? queryDirectDnsServer)(".", "NS", {
+      hostname: "one.one.one.one",
+      address: "2606:4700:4700::1111",
+    }, {
+      signal: options.signal,
+      timeoutMs: Math.min(options.timeoutMs ?? 2500, 1500),
+      transport: "udp",
+    });
+    return true;
+  } catch (error) {
+    // Only a local route/socket failure proves the checker cannot use IPv6.
+    // A timeout or remote DNS error is inconclusive, so the real targets still run.
+    return !checkerNetworkCannotReachIpv6(error);
+  }
+}
+
+function skippedIpv6Reachability(target: DirectDnsTarget): NameserverReachability {
+  return {
+    server: target,
+    skippedReason: "checker_ipv6_unavailable",
+    udp: { reachable: false, authoritative: null, responseCode: null, error: null },
+    tcp: { reachable: false, authoritative: null, responseCode: null, error: null },
+    soa: null,
+    rawResponses: { udp: null, tcp: null },
+  };
 }
 
 function nsRecords(records: RawDnsWireRecord[]) {
@@ -210,7 +254,7 @@ async function queryObservation(
       authoritative: null,
       nameservers: [],
       glue: [],
-      error: error instanceof Error ? error.message : "The nameserver did not answer.",
+      error: safeDnsErrorMessage(error, "The nameserver did not answer."),
       rawResponse: null,
     };
   }
@@ -235,7 +279,7 @@ async function reachabilityCheck(
       };
     } catch (error) {
       return {
-        result: { reachable: false, authoritative: null, responseCode: null, error: error instanceof Error ? error.message : "The nameserver did not answer." },
+        result: { reachable: false, authoritative: null, responseCode: null, error: safeDnsErrorMessage(error, "The nameserver did not answer.") },
         raw: null,
       };
     }
@@ -244,6 +288,7 @@ async function reachabilityCheck(
   const soaRecord = [...(udp.raw?.Answer ?? []), ...(tcp.raw?.Answer ?? [])].find((record) => record.type === 6);
   return {
     server: target,
+    skippedReason: null,
     udp: udp.result,
     tcp: tcp.result,
     soa: soaRecord ? parseSoaRecord(soaRecord) : null,
@@ -278,7 +323,7 @@ async function authoritativeAddressObservation(
       return {
         addresses: [],
         authoritative: null,
-        error: error instanceof Error ? error.message : "The nameserver did not answer.",
+        error: safeDnsErrorMessage(error, "The nameserver did not answer."),
         raw: null,
       };
     }
@@ -300,7 +345,7 @@ async function authoritativeAddressObservation(
 
 type DelegationAssessmentInput = Pick<DelegationCheck,
   "zone" | "parentDelegatedNameservers" | "childPublishedNameservers" | "parentGlue" |
-  "nameserverAddresses" | "reachability" | "authoritativeAddressObservations" | "addressDetails"
+  "nameserverAddresses" | "reachability" | "authoritativeAddressObservations" | "addressDetails" | "ipv6Connectivity"
 >;
 
 export function assessDelegation(input: DelegationAssessmentInput) {
@@ -332,11 +377,16 @@ export function assessDelegation(input: DelegationAssessmentInput) {
     if (!nameserver.addresses.length) findings.push(`${nameserver.hostname} did not resolve to a public IPv4 or IPv6 address.`);
   }
   for (const result of input.reachability) {
+    if (result.skippedReason === "checker_ipv6_unavailable") continue;
     if (!result.udp.reachable) findings.push(`${result.server.hostname} did not answer over UDP at ${result.server.address}.`);
     if (!result.tcp.reachable) findings.push(`${result.server.hostname} did not answer over TCP at ${result.server.address}.`);
     if ((result.udp.reachable || result.tcp.reachable) && result.udp.authoritative !== true && result.tcp.authoritative !== true) {
       findings.push(`${result.server.hostname} answered at ${result.server.address}, but did not claim authority for ${input.zone}.`);
     }
+  }
+
+  if (input.ipv6Connectivity === false) {
+    notes.push("IPv6 checks were skipped because this checker does not have IPv6 connectivity.");
   }
 
   const hostnamesByAddress = new Map<string, string[]>();
@@ -354,7 +404,7 @@ export function assessDelegation(input: DelegationAssessmentInput) {
     const knownPrefixes = [...new Set(details.flatMap((detail) => detail.prefix ? [detail.prefix] : []))];
     if (details.length && knownAsns.length === 1 && details.every((detail) => detail.asn === knownAsns[0])) {
       const networkName = details.find((detail) => detail.networkName)?.networkName;
-      notes.push(`Every discovered nameserver address belongs to AS${knownAsns[0]}${networkName ? ` (${networkName})` : ""}. That is not automatically wrong, but one network problem could affect every server.`);
+      notes.push(`Every discovered nameserver address belongs to AS${knownAsns[0]}${networkName ? ` (${networkName})` : ""}. This identifies the network operator, not one physical server or location.`);
     }
     if (details.length && knownPrefixes.length === 1 && details.every((detail) => detail.prefix === knownPrefixes[0])) {
       notes.push(`Every discovered nameserver address is inside ${knownPrefixes[0]}. Separate networks give a delegation more room to survive a routing problem.`);
@@ -381,7 +431,10 @@ export async function checkDelegation(nameInput: string, options: DiagnosticOpti
   const parentNsResponse = await publicQuery(parentZone, "NS", "cloudflare", { signal: options.signal });
   const parentNameserverNames = nsRecords([...parentNsResponse.Answer, ...parentNsResponse.Authority]);
   const parentNameservers = await resolveNameserverAddresses(parentNameserverNames, options);
-  const parentObservations = await Promise.all(targetsFrom(parentNameservers).map((target) => queryObservation(zone, target, options)));
+  const parentTargets = targetsFrom(parentNameservers);
+  let ipv6Connectivity: boolean | null = parentTargets.some(isIpv6Target) ? await detectIpv6Connectivity(options) : null;
+  const canQuery = (target: DirectDnsTarget) => !isIpv6Target(target) || ipv6Connectivity !== false;
+  const parentObservations = await Promise.all(parentTargets.filter(canQuery).map((target) => queryObservation(zone, target, options)));
 
   const parentDelegatedNameservers = unique(parentObservations.flatMap((observation) => observation.nameservers).concat(delegation.nameservers));
   const parentGlue = [
@@ -394,7 +447,9 @@ export async function checkDelegation(nameInput: string, options: DiagnosticOpti
     ...entry,
     addresses: [...new Set([...entry.addresses, ...parentGlue.filter((glue) => glue.hostname === entry.hostname).map((glue) => glue.address)])],
   }));
-  const childObservations = await Promise.all(targetsFrom(withGlue).map((target) => queryObservation(zone, target, options)));
+  const childTargets = targetsFrom(withGlue);
+  if (ipv6Connectivity === null && childTargets.some(isIpv6Target)) ipv6Connectivity = await detectIpv6Connectivity(options);
+  const childObservations = await Promise.all(childTargets.filter(canQuery).map((target) => queryObservation(zone, target, options)));
   const childPublishedNameservers = unique(childObservations.flatMap((observation) => observation.nameservers));
   const allNameserverNames = unique([...parentDelegatedNameservers, ...childPublishedNameservers]);
   const allAddresses = await resolveNameserverAddresses(allNameserverNames, options);
@@ -402,15 +457,21 @@ export async function checkDelegation(nameInput: string, options: DiagnosticOpti
     ...entry,
     addresses: [...new Set([...entry.addresses, ...parentGlue.filter((glue) => glue.hostname === entry.hostname).map((glue) => glue.address)])],
   }));
-  const reachability = await Promise.all(targetsFrom(nameserverAddresses).map((target) => reachabilityCheck(zone, target, options)));
+  const reachabilityTargets = targetsFrom(nameserverAddresses);
+  if (ipv6Connectivity === null && reachabilityTargets.some(isIpv6Target)) ipv6Connectivity = await detectIpv6Connectivity(options);
+  const reachability = await Promise.all(reachabilityTargets.map((target) =>
+    isIpv6Target(target) && ipv6Connectivity === false
+      ? skippedIpv6Reachability(target)
+      : reachabilityCheck(zone, target, options)
+  ));
   const authoritativeAddressObservations = await Promise.all(nameserverAddresses
     .filter((entry) => entry.hostname === zone || entry.hostname.endsWith(`.${zone}`))
-    .flatMap((entry) => entry.addresses.slice(0, 1).map((address) => authoritativeAddressObservation(entry.hostname, { hostname: entry.hostname, address }, options))));
+    .flatMap((entry) => entry.addresses.filter((address) => isIP(address) !== 6 || ipv6Connectivity !== false).slice(0, 1).map((address) => authoritativeAddressObservation(entry.hostname, { hostname: entry.hostname, address }, options))));
   const addressDetails = await (options.addressEnrichment ?? enrichDnsAddresses)(
     nameserverAddresses.flatMap((entry) => entry.addresses),
     { signal: options.signal, timeoutMs: options.timeoutMs ?? 2500 },
   );
-  const assessment = assessDelegation({ zone, parentDelegatedNameservers, childPublishedNameservers, parentGlue, nameserverAddresses, reachability, authoritativeAddressObservations, addressDetails });
+  const assessment = assessDelegation({ zone, parentDelegatedNameservers, childPublishedNameservers, parentGlue, nameserverAddresses, reachability, authoritativeAddressObservations, addressDetails, ipv6Connectivity });
 
   return {
     checkedAt: new Date().toISOString(),
@@ -418,6 +479,7 @@ export async function checkDelegation(nameInput: string, options: DiagnosticOpti
     inputName,
     zone,
     parentZone,
+    ipv6Connectivity,
     parentNameservers,
     parentObservations,
     parentDelegatedNameservers,
@@ -460,13 +522,18 @@ export async function checkDnsChange(
   const recordType = normalizeChangeRecordType(request.recordType);
   const delegation = await checkDelegation(name, options);
   const directQuery = options.directQuery ?? queryDirectDnsServer;
-  const authoritativeTargets = targetsFrom(delegation.nameserverAddresses);
+  const discoveredAuthoritativeTargets = targetsFrom(delegation.nameserverAddresses);
+  const skippedAuthoritativeTargets = delegation.ipv6Connectivity === false
+    ? discoveredAuthoritativeTargets.filter(isIpv6Target)
+    : [];
+  const authoritativeTargets = discoveredAuthoritativeTargets
+    .filter((target) => !isIpv6Target(target) || delegation.ipv6Connectivity !== false);
   const authoritative: DnsSourceAnswer[] = await Promise.all(authoritativeTargets.map(async (server, index) => {
     try {
       const response = await directQuery(name, recordType, server, { signal: options.signal, timeoutMs: options.timeoutMs ?? 2500 });
       return { id: `authority-${index}`, label: server.hostname, kind: "authoritative", server, responseCode: dnsResponseCode(response.Status), authoritative: response.AA, authenticatedData: null, records: recordsFor(response, recordType), error: null, rawResponse: response };
     } catch (error) {
-      return { id: `authority-${index}`, label: server.hostname, kind: "authoritative", server, responseCode: null, authoritative: null, authenticatedData: null, records: [], error: error instanceof Error ? error.message : "The nameserver did not answer.", rawResponse: null };
+      return { id: `authority-${index}`, label: server.hostname, kind: "authoritative", server, responseCode: null, authoritative: null, authenticatedData: null, records: [], error: safeDnsErrorMessage(error, "The nameserver did not answer."), rawResponse: null };
     }
   }));
   const publicProfiles = dnsResolverProfiles.filter((profile) => profile.kind === "public");
@@ -476,7 +543,7 @@ export async function checkDnsChange(
       const response = await publicQuery(name, recordType, profile.id as Exclude<DnsResolver, "authoritative">, { signal: options.signal });
       return { id: profile.id, label: resolverLabel(profile.id), kind: "resolver", server: null, responseCode: dnsResponseCode(response.Status), authoritative: null, authenticatedData: response.AD, records: recordsFor(response, recordType), error: null, rawResponse: response };
     } catch (error) {
-      return { id: profile.id, label: resolverLabel(profile.id), kind: "resolver", server: null, responseCode: null, authoritative: null, authenticatedData: null, records: [], error: error instanceof Error ? error.message : "The resolver did not answer.", rawResponse: null };
+      return { id: profile.id, label: resolverLabel(profile.id), kind: "resolver", server: null, responseCode: null, authoritative: null, authenticatedData: null, records: [], error: safeDnsErrorMessage(error, "The resolver did not answer."), rawResponse: null };
     }
   }));
   const expectedAnswer = request.expectedAnswer?.trim() || null;
@@ -491,6 +558,8 @@ export async function checkDnsChange(
     checkedAt: new Date().toISOString(),
     durationMs: Date.now() - startedAt,
     zone: delegation.zone,
+    ipv6Connectivity: delegation.ipv6Connectivity,
+    skippedAuthoritativeTargets,
     authoritative,
     resolvers,
     summary: {
@@ -507,12 +576,14 @@ export async function checkSoaConsistency(nameInput: string, options: Diagnostic
   const delegation = await checkDelegation(nameInput, options);
   const observations = delegation.reachability.map((result) => ({
     server: result.server,
+    skippedReason: result.skippedReason,
     soa: result.soa,
     authoritative: result.udp.authoritative === true || result.tcp.authoritative === true,
-    error: result.soa ? null : result.udp.error ?? result.tcp.error ?? "No SOA record was returned.",
+    error: result.skippedReason ? null : result.soa ? null : result.udp.error ?? result.tcp.error ?? "No SOA record was returned.",
     rawResponses: result.rawResponses,
   }));
-  const available = observations.filter((observation): observation is typeof observation & { soa: SoaRecord } => observation.soa !== null);
+  const checkedObservations = observations.filter((observation) => !observation.skippedReason);
+  const available = checkedObservations.filter((observation): observation is typeof observation & { soa: SoaRecord } => observation.soa !== null);
   const serials = [...new Set(available.map((observation) => observation.soa.serial))];
   let newestSerial: number | null = serials[0] ?? null;
   for (const serial of serials.slice(1)) {
@@ -524,9 +595,10 @@ export async function checkSoaConsistency(nameInput: string, options: Diagnostic
     query: { inputName: delegation.inputName, zone: delegation.zone },
     checkedAt: new Date().toISOString(),
     durationMs: Date.now() - startedAt,
+    ipv6Connectivity: delegation.ipv6Connectivity,
     observations,
     summary: {
-      allAnswered: observations.length > 0 && observations.every((observation) => observation.soa !== null && observation.authoritative),
+      allAnswered: checkedObservations.length > 0 && checkedObservations.every((observation) => observation.soa !== null && observation.authoritative),
       serialsAgree: serials.length > 0 && serials.length <= 1,
       newestSerial,
       differences,
@@ -595,7 +667,7 @@ export async function checkCaaPolicy(nameInput: string, options: DiagnosticOptio
         current = aliasTarget;
         reason = "alias";
       } catch (caught) {
-        error = caught instanceof Error ? caught.message : "The CAA lookup failed.";
+        error = safeDnsErrorMessage(caught, "The CAA lookup failed.");
         levels.push({ name: current ?? treeName, searchReason: reason, responseCode: null, records: [], aliasTarget: null, rawResponse: null, error });
         break;
       }

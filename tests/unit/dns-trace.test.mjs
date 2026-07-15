@@ -171,7 +171,7 @@ test("returns the exact stopping point when every nameserver attempt fails", asy
   assert.equal(result.steps.length, 1);
   assert.equal(result.steps[0].outcome, "error");
   assert.match(result.steps[0].message, /could not get a usable response/i);
-  assert.equal(result.steps[0].attempts[0].error, "The nameserver timed out.");
+  assert.equal(result.steps[0].attempts[0].error, "The nameserver did not answer before the timeout.");
 });
 
 test("trace accepts a website URL but not an IP address", async () => {

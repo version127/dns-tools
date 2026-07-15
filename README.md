@@ -43,7 +43,7 @@ The application runs on port `1273`. It does not need a database, user account, 
 
 ## Network requirements
 
-Public resolver lookups and DNSSEC validation use DNS-over-HTTPS on TCP port 443. Trace, authoritative lookup, delegation, SOA, and change checks also contact authoritative nameservers directly over UDP port 53 and retry over TCP port 53 when needed.
+Public resolver lookups and DNSSEC validation use DNS-over-HTTPS on TCP port 443. Trace, authoritative lookup, delegation, SOA, and change checks also contact authoritative nameservers directly over UDP port 53 and retry over TCP port 53 when needed. IPv6 nameserver checks need working IPv6 connectivity on the host. When IPv6 is unavailable, those checks are kept visible as skipped instead of being reported as failures of the domain.
 
 Static hosting and Edge-only runtimes cannot run the complete application. A normal Node server, VM, or Docker host is recommended. Some managed platforms block outbound port 53 even when ordinary web requests work.
 

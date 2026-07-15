@@ -976,19 +976,6 @@
   width: 220px;
 }
 
-.dns-status-table tbody tr:first-child th {
-  color: var(--color-success-text);
-}
-
-.dns-status-table tbody tr:nth-child(3) th {
-  color: var(--color-warning-text);
-}
-
-.dns-status-table tbody tr:nth-child(4) th,
-.dns-status-table tbody tr:nth-child(5) th {
-  color: var(--color-danger-text);
-}
-
 .dns-guide-table tbody th {
   color: var(--color-text);
   font-size: var(--text-sm);

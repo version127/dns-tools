@@ -17,7 +17,7 @@ The latest completed run is recorded in [the 2026-07-15 launch report](launch-re
 - [ ] `npm run test:e2e` passes in desktop and mobile Chromium.
 - [ ] `npm run test:live` completes all seven tools against a public test domain.
 - [ ] Each result remains readable without page-level horizontal overflow.
-- [ ] CSV downloads and per-section raw responses appear where the tool provides them.
+- [ ] Record exports and full diagnostic JSON reports include the same normalized evidence shown on the page, while per-section raw responses remain available in the result.
 
 ## Self-hosting checks
 

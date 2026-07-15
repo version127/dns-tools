@@ -44,6 +44,10 @@ export function downloadText(filename: string, contents: string, type: string) {
   URL.revokeObjectURL(url);
 }
 
-export function DownloadResultButton({ filename, contents, type = "text/csv;charset=utf-8" }: { filename: string; contents: string; type?: string }) {
-  return <button className={styles.downloadButton} onClick={() => downloadText(filename, contents, type)} type="button"><Download aria-hidden="true" size={16} />Download</button>;
+export function diagnosticReportJson(tool: string, result: object) {
+  return JSON.stringify({ tool, reportVersion: 1, ...result }, null, 2);
+}
+
+export function DownloadResultButton({ filename, contents, type = "application/json;charset=utf-8" }: { filename: string; contents: string; type?: string }) {
+  return <button className={styles.downloadButton} onClick={() => downloadText(filename, contents, type)} type="button"><Download aria-hidden="true" size={16} />Download report</button>;
 }

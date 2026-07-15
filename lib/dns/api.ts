@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+export { readDnsJsonBody } from "./request.ts";
 
 export function dnsErrorResponse(status: number, code: string, message: string, headers?: HeadersInit) {
   return NextResponse.json(
@@ -29,14 +30,6 @@ export function dnsClientKey(request: Request) {
     ?? request.headers.get("x-real-ip")
     ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim()
     ?? "unknown";
-}
-
-export async function readDnsJsonBody(request: Request) {
-  const contentLength = Number(request.headers.get("content-length") ?? 0);
-  if (Number.isFinite(contentLength) && contentLength > 4096) throw new Error("request_too_large");
-  const value = await request.json();
-  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("invalid_json");
-  return value as Record<string, unknown>;
 }
 
 export function dnsJson(data: unknown, remaining: number) {
