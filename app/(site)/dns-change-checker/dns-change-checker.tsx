@@ -51,6 +51,20 @@ function AnswerGroups({ sources, authoritative }: { sources: DnsSourceAnswer[]; 
   })}</div>;
 }
 
+function resolverAgreementSentence(result: Result) {
+  const usableReplies = result.resolvers.filter((source) => !source.error && source.responseCode === "NOERROR").length;
+  const unavailable = Math.max(0, result.summary.totalResolvers - usableReplies);
+  const agreement = usableReplies === 0
+    ? "No public resolver returned a usable reply."
+    : usableReplies === 1
+      ? result.summary.agreeingResolvers === 1
+        ? "The one usable public resolver reply matches it."
+        : "The one usable public resolver reply does not match it."
+      : `${result.summary.agreeingResolvers} of ${usableReplies} usable public resolver replies match it.`;
+  if (unavailable === 0) return agreement;
+  return `${agreement} ${unavailable} other resolver${unavailable === 1 ? "" : "s"} did not return a usable reply.`;
+}
+
 export function DnsChangeChecker({ initialName = "", initialRecordType = "A" }: { initialName?: string; initialRecordType?: ChangeRecordType }) {
   const [name, setName] = useState(initialName);
   const [recordType, setRecordType] = useState(initialRecordType);
@@ -90,8 +104,8 @@ export function DnsChangeChecker({ initialName = "", initialRecordType = "A" }: 
           {!hasUsableAuthoritativeAnswer
             ? "None of the authoritative nameserver addresses returned a usable answer, so there is no source answer to compare yet. Check the source responses below before reading the resolver caches."
             : result.summary.authoritativeServersAgree
-              ? `The authoritative nameservers agree on the current answer. ${result.summary.agreeingResolvers} of ${result.summary.totalResolvers} public resolvers match it.`
-              : `The authoritative nameservers returned more than one answer. This can happen while a change is settling, but some DNS providers also vary answers on purpose. ${result.summary.matchingAuthoritativeSources} of ${result.summary.totalAuthoritativeSources} usable authoritative replies returned the answer used for comparison, and ${result.summary.agreeingResolvers} of ${result.summary.totalResolvers} public resolvers match it.`}
+              ? `The authoritative nameservers agree on the current answer. ${resolverAgreementSentence(result)}`
+              : `The authoritative nameservers returned more than one answer. This can happen while a change is settling, but some DNS providers also vary answers on purpose. ${result.summary.matchingAuthoritativeSources} of ${result.summary.totalAuthoritativeSources} usable authoritative replies returned the answer used for comparison. ${resolverAgreementSentence(result)}`}
         </p>
         {result.ipv6Connectivity === false ? <p>IPv6 authoritative checks were skipped because this checker does not have IPv6 connectivity.</p> : null}
         {!result.summary.authoritativeServersAgree && hasUsableAuthoritativeAnswer ? <p>If you did not expect the answers to vary, <a className={styles.nextCheck} href={`/soa-checker?name=${encodeURIComponent(result.zone)}`}>compare their SOA serials</a> to see whether one nameserver is still serving an older copy of the zone.</p> : null}
