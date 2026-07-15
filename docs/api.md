@@ -60,7 +60,7 @@ POST /api/dns/change-checker
 }
 ```
 
-`expectedAnswer` is optional. The response starts with authoritative observations and then public resolver observations. Every source retains its record set, TTL meaning, errors, timing, addresses, and raw response. Record order is not treated as meaningful.
+`expectedAnswer` is optional. The response starts with authoritative observations and then public resolver observations. Every source retains its record set, TTL meaning, errors, timing, addresses, and raw response. Record order is not treated as meaningful. When authoritative answers differ, the summary compares resolvers with the record set returned by the largest number of usable authoritative sources and reports how many authoritative sources formed that baseline.
 
 ## Nameserver Delegation Checker
 

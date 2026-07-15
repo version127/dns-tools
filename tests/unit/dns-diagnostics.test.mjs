@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { assessDelegation, checkCaaPolicy, compareSerials, negativeCacheTtlSeconds, parseCaaRecord, parseSoaRecord } from "../../lib/dns/diagnostics.ts";
+import { assessDelegation, checkCaaPolicy, compareSerials, negativeCacheTtlSeconds, parseCaaRecord, parseSoaRecord, summarizeDnsChangeAgreement } from "../../lib/dns/diagnostics.ts";
 import { checkDnssec, dnssecSignatureFromRrsig, parseDelvVerdict } from "../../lib/dns/dnssec.ts";
 import { csvFromRows, groupDnsSources, groupSoaObservations } from "../../lib/dns/diagnostic-presentation.ts";
 import { safeDnsErrorMessage } from "../../lib/dns/errors.ts";
@@ -239,6 +239,35 @@ test("diagnostic source grouping removes repeated answers without losing source 
   assert.equal(groups.length, 1);
   assert.equal(groups[0].sources.length, 2);
   assert.deepEqual(groups[0].sources.map((source) => source.records[0].resolverTtlSeconds), [300, 280]);
+});
+
+test("DNS change comparison uses the most common authoritative answer instead of the first reply", () => {
+  const source = (id, value, kind = "authoritative") => ({
+    id,
+    label: id,
+    kind,
+    server: kind === "authoritative" ? { hostname: `${id}.example`, address: `192.0.2.${id.length}` } : null,
+    responseCode: "NOERROR",
+    authoritative: kind === "authoritative" ? true : null,
+    authenticatedData: null,
+    records: [{ ownerName: "example.com", type: "A", typeCode: 1, value, resolverTtlSeconds: 300 }],
+    error: null,
+    rawResponse: null,
+  });
+  const authoritative = [
+    source("odd", "192.0.2.99"),
+    source("ns1", "192.0.2.10"),
+    source("ns2", "192.0.2.10"),
+    source("ns3", "192.0.2.10"),
+  ];
+  const resolvers = [source("cloudflare", "192.0.2.10", "resolver"), source("google", "192.0.2.10", "resolver")];
+
+  assert.deepEqual(summarizeDnsChangeAgreement(authoritative, resolvers), {
+    authoritativeServersAgree: false,
+    matchingAuthoritativeSources: 3,
+    totalAuthoritativeSources: 4,
+    agreeingResolvers: 2,
+  });
 });
 
 test("SOA grouping keeps different serials separate but combines identical addresses", () => {

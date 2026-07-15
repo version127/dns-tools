@@ -14,7 +14,14 @@ type Result = {
   ipv6Connectivity: boolean | null;
   authoritative: DnsSourceAnswer[];
   resolvers: DnsSourceAnswer[];
-  summary: { authoritativeServersAgree: boolean; agreeingResolvers: number; totalResolvers: number; expectedAnswerMatches: string[] | null };
+  summary: {
+    authoritativeServersAgree: boolean;
+    matchingAuthoritativeSources: number;
+    totalAuthoritativeSources: number;
+    agreeingResolvers: number;
+    totalResolvers: number;
+    expectedAnswerMatches: string[] | null;
+  };
 };
 
 function stateFor(group: ReturnType<typeof groupDnsSources>[number]) {
@@ -52,7 +59,9 @@ export function DnsChangeChecker({ initialName = "", initialRecordType = "A" }: 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const report = useMemo(() => result ? diagnosticReportJson("DNS Change Checker", result) : "", [result]);
-  const hasAuthoritativeReply = result?.authoritative.some((source) => !source.error) ?? false;
+  const hasUsableAuthoritativeAnswer = result?.authoritative.some(
+    (source) => !source.error && source.responseCode === "NOERROR" && source.authoritative === true,
+  ) ?? false;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -77,9 +86,15 @@ export function DnsChangeChecker({ initialName = "", initialRecordType = "A" }: 
     </form>
     {result ? <section className={styles.results} aria-live="polite">
       <DiagnosticResultHeader action={<DownloadResultButton contents={report} filename={`${result.query.name}-${result.query.recordType}-dns-change-report.json`} />} checkedAt={result.checkedAt} durationMs={result.durationMs} hostname={result.query.name}>
-        <p>{!hasAuthoritativeReply ? "None of the authoritative nameserver addresses returned a usable answer, so there is no source answer to compare yet." : result.summary.authoritativeServersAgree ? "The authoritative nameservers agree on the current answer." : "The authoritative nameservers are returning different answers, so the change is not consistent at the source yet."} {hasAuthoritativeReply ? `${result.summary.agreeingResolvers} of ${result.summary.totalResolvers} public resolvers match the authoritative answer we used for comparison.` : "Check the source errors below before reading the resolver caches."}</p>
+        <p>
+          {!hasUsableAuthoritativeAnswer
+            ? "None of the authoritative nameserver addresses returned a usable answer, so there is no source answer to compare yet. Check the source responses below before reading the resolver caches."
+            : result.summary.authoritativeServersAgree
+              ? `The authoritative nameservers agree on the current answer. ${result.summary.agreeingResolvers} of ${result.summary.totalResolvers} public resolvers match it.`
+              : `The authoritative nameservers returned more than one answer. This can happen while a change is settling, but some DNS providers also vary answers on purpose. ${result.summary.matchingAuthoritativeSources} of ${result.summary.totalAuthoritativeSources} usable authoritative replies returned the answer used for comparison, and ${result.summary.agreeingResolvers} of ${result.summary.totalResolvers} public resolvers match it.`}
+        </p>
         {result.ipv6Connectivity === false ? <p>IPv6 authoritative checks were skipped because this checker does not have IPv6 connectivity.</p> : null}
-        {!result.summary.authoritativeServersAgree && hasAuthoritativeReply ? <p><a className={styles.nextCheck} href={`/soa-checker?name=${encodeURIComponent(result.zone)}`}>Compare their SOA serials</a> to see whether one nameserver is still serving an older copy of the zone.</p> : null}
+        {!result.summary.authoritativeServersAgree && hasUsableAuthoritativeAnswer ? <p>If you did not expect the answers to vary, <a className={styles.nextCheck} href={`/soa-checker?name=${encodeURIComponent(result.zone)}`}>compare their SOA serials</a> to see whether one nameserver is still serving an older copy of the zone.</p> : null}
       </DiagnosticResultHeader>
       {result.query.expectedAnswer && result.summary.expectedAnswerMatches ? <div className={styles.finding} data-tone={result.summary.expectedAnswerMatches.length ? "good" : "warning"}><p>{result.summary.expectedAnswerMatches.length ? `The value you expected appears in ${result.summary.expectedAnswerMatches.length} source${result.summary.expectedAnswerMatches.length === 1 ? "" : "s"}.` : "The value you expected did not appear in any response we received."}</p></div> : null}
       <section className={styles.section}><h3>Published by the authoritative nameservers</h3><AnswerGroups authoritative sources={result.authoritative} /></section>

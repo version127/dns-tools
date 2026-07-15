@@ -513,6 +513,49 @@ function recordsFor(response: RawDnsWireResponse, type: DnsRecordType) {
   return response.Answer.filter((record) => record.type === requestedCode || record.type === 5).map(normalizeWireRecord);
 }
 
+function normalizedChangeValue(value: string) {
+  return value.trim().replace(/\.$/, "").toLowerCase();
+}
+
+function changeRrsetKey(source: DnsSourceAnswer) {
+  return source.records
+    .map((record) => `${record.ownerName}|${record.type}|${normalizedChangeValue(record.value)}`)
+    .sort()
+    .join("\n");
+}
+
+export function summarizeDnsChangeAgreement(authoritative: DnsSourceAnswer[], resolvers: DnsSourceAnswer[]) {
+  const usableAuthority = authoritative.filter(
+    (source) => source.responseCode === "NOERROR" && source.authoritative === true && !source.error,
+  );
+  const counts = new Map<string, number>();
+  let referenceKey: string | null = null;
+  let matchingAuthoritativeSources = 0;
+
+  for (const source of usableAuthority) {
+    const key = changeRrsetKey(source);
+    const count = (counts.get(key) ?? 0) + 1;
+    counts.set(key, count);
+    if (count > matchingAuthoritativeSources) {
+      referenceKey = key;
+      matchingAuthoritativeSources = count;
+    }
+  }
+
+  const respondingAuthority = authoritative.filter((source) => !source.error);
+  return {
+    authoritativeServersAgree: respondingAuthority.length > 0
+      && new Set(respondingAuthority.map((source) => `${source.responseCode ?? "unknown"}|${changeRrsetKey(source)}`)).size <= 1,
+    matchingAuthoritativeSources,
+    totalAuthoritativeSources: usableAuthority.length,
+    agreeingResolvers: referenceKey === null
+      ? 0
+      : resolvers.filter(
+        (source) => source.responseCode === "NOERROR" && !source.error && changeRrsetKey(source) === referenceKey,
+      ).length,
+  };
+}
+
 export async function checkDnsChange(
   request: { name: string; recordType: unknown; expectedAnswer?: string },
   options: DiagnosticOptions = {},
@@ -547,12 +590,7 @@ export async function checkDnsChange(
     }
   }));
   const expectedAnswer = request.expectedAnswer?.trim() || null;
-  const normalizeValue = (value: string) => value.trim().replace(/\.$/, "").toLowerCase();
-  const rrsetKey = (source: DnsSourceAnswer) => source.records.map((record) => `${record.ownerName}|${record.type}|${normalizeValue(record.value)}`).sort().join("\n");
-  const successfulAuthority = authoritative.find((source) => source.responseCode === "NOERROR" && source.authoritative === true);
-  const authorityKey = successfulAuthority ? rrsetKey(successfulAuthority) : null;
-  const agreeingResolvers = authorityKey === null ? 0 : resolvers.filter((source) => source.responseCode === "NOERROR" && rrsetKey(source) === authorityKey).length;
-  const respondingAuthority = authoritative.filter((source) => !source.error);
+  const agreement = summarizeDnsChangeAgreement(authoritative, resolvers);
   return {
     query: { name, recordType, expectedAnswer },
     checkedAt: new Date().toISOString(),
@@ -563,10 +601,9 @@ export async function checkDnsChange(
     authoritative,
     resolvers,
     summary: {
-      authoritativeServersAgree: respondingAuthority.length > 0 && new Set(respondingAuthority.map((source) => `${source.responseCode ?? "unknown"}|${rrsetKey(source)}`)).size <= 1,
-      agreeingResolvers,
+      ...agreement,
       totalResolvers: resolvers.length,
-      expectedAnswerMatches: expectedAnswer === null ? null : [...authoritative, ...resolvers].filter((source) => source.records.some((record) => normalizeValue(record.value) === normalizeValue(expectedAnswer))).map((source) => source.id),
+      expectedAnswerMatches: expectedAnswer === null ? null : [...authoritative, ...resolvers].filter((source) => source.records.some((record) => normalizedChangeValue(record.value) === normalizedChangeValue(expectedAnswer))).map((source) => source.id),
     },
   };
 }
