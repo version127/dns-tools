@@ -66,5 +66,6 @@ assert.doesNotMatch(header, /Built by Version127/);
 const source = textFiles(root).map((file) => readFileSync(file, "utf8")).join("\n");
 assert.doesNotMatch(source, /DATABASE_URL|SUPABASE_SERVICE_ROLE_KEY|public\.version127_pages|the Version127 site/);
 assert.doesNotMatch(source, /https?:\/\/[^\s"']+:[^\s"']+@/);
+assert.doesNotMatch(source, /actions\/(?:checkout|setup-node)@v4/);
 
 console.log(`Repository check passed: ${tools.length} pages, ${tools.length} APIs, no database dependency, no embedded secrets.`);
