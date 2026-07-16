@@ -2,7 +2,7 @@
 
 DNS Tools is a self-hostable collection for seeing what a domain is actually doing in DNS. It can look up records, follow the path from the root servers, compare a recent change, and inspect delegation, DNSSEC, SOA, and CAA configuration without turning the result into a vague health score.
 
-[Try the hosted tools](https://version127.com/dns-tools) · [API reference](docs/api.md) · [Self-hosting guide](docs/self-hosting.md) · [Launch checklist](docs/launch-checklist.md) · [Changelog](CHANGELOG.md)
+[Try the hosted tools](https://version127.com/dns-tools) · [API reference](docs/api.md) · [Self-hosting guide](docs/self-hosting.md) · [Tool documentation](docs/tools) · [Launch checklist](docs/launch-checklist.md) · [Changelog](CHANGELOG.md)
 
 ![DNS Lookup showing completed records for cloudflare.com](screenshots/dns-lookup.png)
 
@@ -92,7 +92,9 @@ npm run build
 npm run quality
 ```
 
-The core DNS engine lives in `lib/dns`, the seven server routes live in `app/api/dns`, and the corresponding pages live in `app/(site)`. Read [docs/architecture.md](docs/architecture.md) before changing transport or normalization behavior.
+The core DNS engine lives in `lib/dns`, the seven server routes live in `app/api/dns`, and the corresponding pages live in `app/(site)`. Each tool has matching documentation under `docs/tools/<tool>/` and page tests under `tests/pages/<tool>/`. Shared transport and repository checks stay under `tests/shared/`.
+
+Read [docs/architecture.md](docs/architecture.md) before changing transport or normalization behavior. Maintainers should also read [how this repository stays synchronized with Version127](docs/maintainers/syncing-with-version127.md).
 
 ## License and attribution
 

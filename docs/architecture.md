@@ -26,6 +26,9 @@ The application owns its domain root. `/` is the DNS Tools hub, and every tool u
 - `lib/dns/*presentation*`, `format-record.ts`, and `export.ts` format records without changing their meaning.
 - `app/(site)/page.tsx` owns the hub, while the seven sibling route folders own the flat tool pages.
 - `app/(site)/_dns-tools` contains shared sidebar, result, and route-family presentation code without creating another public route.
+- `docs/tools/<tool>/` contains the explanation and maintenance notes owned by one tool.
+- `tests/pages/<tool>/` contains the browser contract owned by one tool.
+- `tests/shared/` contains behavior that genuinely protects several tools or the whole repository.
 
 The top bar contains the Version127 logo and the DNS Tools product name. Version127 attribution appears in the footer, so it is not repeated as a separate top-bar link.
 
@@ -46,6 +49,12 @@ UDP is tried first. A truncated reply is retried over TCP. Response IDs must mat
 ## State and scaling
 
 Results are not stored. The only mutable server state is the rate-limit map inside one Node process. That is appropriate for a small self-hosted instance. Multiple replicas need a shared limit at the reverse proxy or a future shared rate-limit adapter.
+
+## Version127 synchronization
+
+This public repository is maintained from the private Version127 application tree. The DNS engine, API routes, and their unit tests are copied through an explicit allowlist. Standalone routes, deployment files, public documentation, and public CI remain repository-owned because their URLs and operating assumptions differ from the hosted website.
+
+The synchronization command has a check mode so CI and maintainers can detect drift without overwriting repository-owned files. Read `docs/maintainers/syncing-with-version127.md` before publishing an update.
 
 ## SEO boundary
 

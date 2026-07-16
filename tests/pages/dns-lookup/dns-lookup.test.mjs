@@ -5,34 +5,34 @@ import dnsPacket from "dns-packet";
 import {
   buildUnifiedAliasChain,
   normalizeAliasEdges,
-} from "../../lib/dns/alias-chain.ts";
-import { normalizeDnsInput, reverseDnsName } from "../../lib/dns/normalize-name.ts";
+} from "../../../lib/dns/alias-chain.ts";
+import { normalizeDnsInput, reverseDnsName } from "../../../lib/dns/normalize-name.ts";
 import {
   normalizeProviderResponse,
   nullableBoolean,
-} from "../../lib/dns/normalize-provider-response.ts";
+} from "../../../lib/dns/normalize-provider-response.ts";
 import {
   ALL_RECORD_TYPES,
   lookupDns,
   normalizeSelection,
-} from "../../lib/dns/lookup.ts";
+} from "../../../lib/dns/lookup.ts";
 import {
   clearDnsLookupLimitsForTests,
   consumeDnsLookupLimit,
   dnsLookupLimitEntryCountForTests,
   rateLimitCost,
-} from "../../lib/dns/rate-limit.ts";
-import { readDnsJsonBody } from "../../lib/dns/request.ts";
-import { formatAuthoritativeTtl, formatResolverTtl, recordFields } from "../../lib/dns/format-record.ts";
-import { websiteFaviconUrl } from "../../lib/dns/favicon.ts";
-import { dnsRecordsCsv } from "../../lib/dns/export.ts";
+} from "../../../lib/dns/rate-limit.ts";
+import { readDnsJsonBody } from "../../../lib/dns/request.ts";
+import { formatAuthoritativeTtl, formatResolverTtl, recordFields } from "../../../lib/dns/format-record.ts";
+import { websiteFaviconUrl } from "../../../lib/dns/favicon.ts";
+import { dnsRecordsCsv } from "../../../lib/dns/export.ts";
 import {
   addressToCymruName,
   enrichDnsResults,
   parseCymruAsnName,
   parseCymruOrigin,
-} from "../../lib/dns/network-enrichment.ts";
-import { caaPropertyCounts, traceLinkForLookup } from "../../lib/dns/result-presentation.ts";
+} from "../../../lib/dns/network-enrichment.ts";
+import { caaPropertyCounts, traceLinkForLookup } from "../../../lib/dns/result-presentation.ts";
 
 function wireResponse(queryBody, answers = [], flags = dnsPacket.RECURSION_DESIRED | dnsPacket.RECURSION_AVAILABLE | dnsPacket.AUTHENTIC_DATA) {
   const query = dnsPacket.decode(Buffer.from(queryBody));

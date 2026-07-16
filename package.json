@@ -19,7 +19,7 @@
     "start": "node scripts/start.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run typecheck && npm run test:unit && npm run test:repo",
-    "test:unit": "node --experimental-strip-types --test tests/unit/*.test.mjs",
+    "test:unit": "node --experimental-strip-types --test \"tests/**/*.test.mjs\"",
     "test:repo": "node scripts/verify-repository.mjs",
     "test:e2e": "playwright test",
     "test:live": "node scripts/live-smoke.mjs",

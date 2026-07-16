@@ -26,7 +26,8 @@ function textFiles(dir) {
 for (const [page, api] of tools) {
   assert.ok(existsSync(path.join(root, "app", "(site)", page, "page.tsx")), `missing flat page ${page}`);
   assert.ok(existsSync(path.join(root, "app", "api", "dns", api, "route.ts")), `missing API ${api}`);
-  assert.ok(existsSync(path.join(root, "docs", "tools", `${page}.md`)), `missing docs ${page}`);
+  assert.ok(existsSync(path.join(root, "docs", "tools", page, "README.md")), `missing docs ${page}`);
+  assert.ok(existsSync(path.join(root, "tests", "pages", page, "page.spec.ts")), `missing page test ${page}`);
 }
 
 const packageJson = JSON.parse(readFileSync(path.join(root, "package.json"), "utf8"));
@@ -34,8 +35,23 @@ assert.equal(packageJson.dependencies.pg, undefined);
 assert.equal(packageJson.dependencies["@supabase/supabase-js"], undefined);
 assert.match(packageJson.scripts.dev, /1273/);
 assert.equal(packageJson.overrides.postcss, "8.5.10");
+assert.equal(packageJson.repository.url, "https://github.com/version127/dns-tools.git");
 
-for (const required of ["README.md", "LICENSE", "CONTRIBUTING.md", "SECURITY.md", "openapi.yaml", "Dockerfile", "docker-compose.yml", ".env.example", "docs/launch-checklist.md", "public/version127-logo-white.png"]) {
+for (const required of [
+  "README.md",
+  "LICENSE",
+  "CONTRIBUTING.md",
+  "SECURITY.md",
+  "openapi.yaml",
+  "Dockerfile",
+  "docker-compose.yml",
+  ".env.example",
+  "docs/launch-checklist.md",
+  "docs/maintainers/syncing-with-version127.md",
+  "tests/pages/home/page.spec.ts",
+  "tests/shared/dns-tools.spec.ts",
+  "public/version127-logo-white.png",
+]) {
   assert.ok(existsSync(path.join(root, required)), `missing ${required}`);
 }
 

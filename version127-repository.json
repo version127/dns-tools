@@ -1,0 +1,8 @@
+{
+  "nameWithOwner": "version127/dns-tools",
+  "defaultBranch": "main",
+  "visibility": "public",
+  "sourcePath": "repos/dns-tools",
+  "syncCheck": "npm run version127:dns-tools:sync-check",
+  "qualityCheck": "npm --prefix repos/dns-tools run quality"
+}

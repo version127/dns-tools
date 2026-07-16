@@ -6,7 +6,7 @@ import {
   TRACE_RECORD_TYPES,
   normalizeTraceRecordType,
   traceDns,
-} from "../../lib/dns/trace.ts";
+} from "../../../lib/dns/trace.ts";
 
 const flags = { AA: false, AD: false, CD: false, RA: false, RD: false, TC: false };
 
